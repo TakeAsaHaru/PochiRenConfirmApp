@@ -30,8 +30,10 @@ import {
 } from "@chakra-ui/react";
 
 import jsondjangoapp from "../api/jsondjangoapp";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Console } from "console";
+import { Choice } from "./choice";
+import { Target } from "./target";
 
 type TaskInfo = {
   id: string;
@@ -54,7 +56,14 @@ type TaskStatus = {
   task: TaskInfo;
 };
 
-export function Task() {
+type ChoiceInfo = {
+  id: string;
+  choice: string;
+  is_input: boolean;
+  created_at: Date;
+};
+
+export function Task(props: { userId: string | undefined }) {
   // 全タスク取得フラグ
   const [isAll, setIsAll] = useState(false);
   // 回答状況表示フラグ
@@ -84,8 +93,11 @@ export function Task() {
 
   // 取得したタスク一覧
   const [taskList, setTaskList] = useState<TaskInfo[]>([]);
-  //タスク対象者一覧
+  // タスク対象者一覧
   const [taskStatusList, setTaskStatusList] = useState<TaskStatus[]>([]);
+  // 取得した選択肢一覧
+  const [choiceList, setChoiceList] = useState<ChoiceInfo[]>([]);
+
   // 選択中のタスクのID
   const [taskId, setTaskId] = useState("");
   // 選択中のタスク情報
@@ -122,6 +134,13 @@ export function Task() {
     }
   };
 
+  useEffect(() => {
+    (async () => {
+      const task = await jsondjangoapp.get("/api/v1/task/");
+      setTaskList(task.data);
+    })();
+  }, []);
+
   // 全タスク取得
   const retrieveAllTask = async () => {
     const task = await jsondjangoapp.get("/api/v1/task/");
@@ -139,12 +158,25 @@ export function Task() {
     setTaskStatusList(task.data);
   };
 
-  // 選択中のタスク削除(axious)
+  // 選択肢取得
+  const retrieveChoiceList = async (taskId: string) => {
+    try {
+      const choiceList = await jsondjangoapp.get(
+        `/api/v1/choice/?task=${taskId}`
+      );
+      console.log(choiceList);
+      setChoiceList(choiceList.data);
+    } catch {
+      setChoiceList([]);
+    }
+  };
+
+  // 選択中のタスク削除(axios)
   const deleteTask = async () => {
     const task = await jsondjangoapp.delete(`/api/v1/task/${taskId}/`);
   };
 
-  // 選択中のタスク内容更新(axious)
+  // 選択中のタスク内容更新(axios)
   // ※タスクタイトルとタスク本文のみ
   const updateTask = async () => {
     const task = await jsondjangoapp.patch(`/api/v1/task/${taskId}/`, {
@@ -224,6 +256,9 @@ export function Task() {
               {errors.content && errors.content.message}
             </FormErrorMessage>
           </FormControl>
+
+          <Choice taskId={taskId} />
+
           <HStack mt={2}>
             <Icon
               as={
@@ -438,7 +473,10 @@ export function Task() {
             </HStack>
           </Box>
         </form>
+
+        <Target userId={props.userId} taskId={taskId} />
       </Box>
+
       <Box ml={10}>
         <Flex direction="row">
           <Flex direction="column" mr={10}>
@@ -454,6 +492,7 @@ export function Task() {
                       onClick={() => {
                         setTaskId(task.id);
                         setSelectedTask(task);
+                        retrieveChoiceList(task.id);
                         onOpen();
                       }}
                     >
@@ -463,7 +502,16 @@ export function Task() {
                 })
               : taskStatusList.map((taskStatus) => {
                   return (
-                    <Text key={taskStatus.task.id}>
+                    <Text
+                      key={taskStatus.task.id}
+                      _hover={{ cursor: "pointer" }}
+                      onClick={() => {
+                        setTaskId(taskStatus.task.id);
+                        setSelectedTask(taskStatus.task);
+                        retrieveChoiceList(taskStatus.task.id);
+                        onOpen();
+                      }}
+                    >
                       {taskStatus.task.title}
                     </Text>
                   );
@@ -560,6 +608,12 @@ export function Task() {
                       <Box fontWeight="bold">作成日時:</Box>
                       <Box>{String(selectedTask?.created_at)}</Box>
                     </HStack>
+
+                    <Divider mt={3} border="1px" />
+                    <Box fontWeight="bold">選択肢一覧</Box>
+                    {choiceList.map((choice) => {
+                      return <Box key={choice.id}>{choice.choice}</Box>;
+                    })}
                   </Flex>
                 </ModalBody>
 
